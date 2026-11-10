@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#111111">
+<title>PANDA · متابعة الطلبيات</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+ --bg:#f4f3ef;--surface:#ffffff;--ink:#141414;--mute:#6f6e69;--line:#e7e5df;
+ --r3:#d32f2f;--r2:#ef6c00;--r1:#c79100;--cancel:#4a4a4a;--fix:#2e7d32;--wait:#1e5bc6;
+ --wa:#1faa59;--radius:14px;
+}
+@media (prefers-color-scheme:dark){:root{--bg:#0f0f10;--surface:#1a1a1c;--ink:#f3f3f1;--mute:#9b9a95;--line:#2c2c2f}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0}
+body{font-family:"IBM Plex Sans Arabic",system-ui,sans-serif;background:var(--bg);color:var(--ink);line-height:1.5}
+.wrap{max-width:820px;margin:auto;padding:0 14px}
+/* top bar */
+.bar{position:sticky;top:0;z-index:10;background:var(--ink);color:var(--bg);padding:12px 0 10px;padding-top:max(12px,env(safe-area-inset-top))}
+@media (prefers-color-scheme:dark){.bar{background:#000;color:#f3f3f1}}
+.bar .wrap{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.5px}
+.logo{width:34px;height:34px;border-radius:50%;background:#fff;display:grid;place-items:center;font-size:20px}
+.brand small{display:block;font-weight:400;font-size:12px;opacity:.7;letter-spacing:0}
+.upd{font-size:12px;opacity:.75;text-align:left}
+/* kpis */
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px}
+.kpi b{display:block;font-size:20px;font-variant-numeric:tabular-nums}
+.kpi span{font-size:12px;color:var(--mute)}
+.kpi.alert b{color:var(--r3)}
+/* filters */
+.tools{display:flex;flex-direction:column;gap:10px;margin-bottom:6px}
+.search{width:100%;padding:11px 14px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-size:15px}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+.chip{flex:0 0 auto;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:6px 12px;font:inherit;font-size:13px;cursor:pointer;display:flex;gap:6px;align-items:center}
+.chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chip i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.chip em{font-style:normal;opacity:.7;font-size:12px}
+/* groups */
+.group{margin-top:18px}
+.ghead{display:flex;align-items:center;gap:8px;margin:0 2px 4px;font-size:15px;font-weight:700}
+.ghead i{width:10px;height:10px;border-radius:50%}
+.ghint{font-size:12.5px;color:var(--mute);margin:0 2px 10px}
+.card{background:var(--surface);border:1px solid var(--line);border-inline-start:4px solid var(--c);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px;transition:opacity .2s}
+.card.done{opacity:.4}
+.row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.nm{font-weight:600;font-size:15.5px}
+.amt{font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums}
+.sub{font-size:12.5px;color:var(--mute)}
+.pill{display:inline-block;font-size:11px;padding:0 8px;border-radius:999px;background:var(--bg);border:1px solid var(--line);margin-inline-start:6px;vertical-align:2px;font-weight:500}
+.prd{font-size:13.5px;margin:6px 0 2px}
+.acts{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-top:10px}
+.acts a,.acts button{display:flex;align-items:center;justify-content:center;gap:6px;text-decoration:none;font:inherit;font-weight:600;font-size:14px;padding:10px 8px;border-radius:11px;border:0;cursor:pointer}
+.call{background:var(--ink);color:var(--bg)}
+.wa{background:var(--wa);color:#fff}
+.ok{background:transparent;color:var(--ink);border:1px solid var(--line)!important;min-width:64px}
+.card.done .ok{background:var(--fix);color:#fff;border-color:var(--fix)!important}
+details{margin-top:8px}
+summary{font-size:12.5px;color:var(--mute);cursor:pointer}
+.msg{white-space:pre-wrap;font-size:13px;background:var(--bg);border-radius:10px;padding:10px;margin-top:6px}
+.empty{text-align:center;color:var(--mute);padding:40px 0}
+footer{text-align:center;color:var(--mute);font-size:12px;padding:24px 0 40px}
+/* login */
+#gate{position:fixed;inset:0;background:var(--bg);display:grid;place-items:center;z-index:50;padding:20px}
+#gate form{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:26px 22px;width:100%;max-width:340px;text-align:center}
+#gate .logo{margin:0 auto 10px;width:52px;height:52px;font-size:28px;background:var(--bg)}
+#gate h2{margin:0 0 4px;font-size:18px}
+#gate p{margin:0 0 16px;color:var(--mute);font-size:13px}
+#gate input{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit;font-size:16px;text-align:center;letter-spacing:2px}
+#gate button{width:100%;margin-top:10px;padding:12px;border-radius:12px;border:0;background:var(--ink);color:var(--bg);font:inherit;font-weight:600;font-size:15px;cursor:pointer}
+#gate .err{color:var(--r3);font-size:13px;min-height:18px;margin-top:8px}
+</style>
+</head>
+<body>
+<div id="gate">
+ <form id="gateForm">
+  <div class="logo">🐼</div>
+  <h2>PANDA · متابعة الطلبيات</h2>
+  <p>أدخلي رمز الدخول</p>
+  <input id="pin" type="password" inputmode="text" autocomplete="current-password" required>
+  <button type="submit">دخول</button>
+  <div class="err" id="err"></div>
+ </form>
+</div>
+
+<div class="bar"><div class="wrap">
+ <div class="brand"><div class="logo">🐼</div><div>PANDA<small>متابعة طلبيات ZR Express</small></div></div>
+ <div class="upd" id="upd"></div>
+</div></div>
+
+<main class="wrap">
+ <div class="kpis" id="kpis"></div>
+ <div class="tools">
+  <input class="search" id="q" placeholder="ابحث بالاسم أو الهاتف أو الولاية أو رقم التتبع…">
+  <div class="chips" id="chips"></div>
+ </div>
+ <div id="list"></div>
+ <footer>يُحدَّث تلقائياً مرتين يومياً · علامة «تم» محفوظة على هذا الجهاز فقط</footer>
+</main>
+
+<script>
+const G=[
+ {k:"r3",t:"لا يرد — المحاولة 3",h:"آخر فرصة قبل إرجاع الطرد. اتصلي فوراً.",c:"var(--r3)",m:"r3"},
+ {k:"r2",t:"لا يرد — المحاولة 2",h:"أرسلي رسالة واتساب ثم اتصلي.",c:"var(--r2)",m:"r1"},
+ {k:"r1",t:"لا يرد — المحاولة 1",h:"رسالة واتساب تكفي غالباً.",c:"var(--r1)",m:"r1"},
+ {k:"cancel",t:"ألغى الطلبية",h:"اسألي عن السبب: المقاس، السعر، الموعد… وحاولي إنقاذها.",c:"var(--cancel)",m:"cancel"},
+ {k:"fix",t:"عنوان خاطئ أو مؤجلة",h:"أكّدي البلدية والعنوان أو موعد التسليم الجديد.",c:"var(--fix)",m:"fix"},
+ {k:"wait",t:"في المكتب بانتظار الزبون",h:"ذكّري الزبون بأن الطلبية جاهزة للاستلام.",c:"var(--wait)",m:"desk"}
+];
+let DATA=null,filter="all",DONE=new Set();
+try{DONE=new Set(JSON.parse(localStorage.getItem("panda_done")||"[]"))}catch(e){}
+function saveDone(){try{localStorage.setItem("panda_done",JSON.stringify([...DONE]))}catch(e){}}
+const fmt=n=>Number(n).toLocaleString("fr-FR");
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const clean=n=>String(n).replace(/\s*\d{4,5}(-\d{4,5})?\s*$/,"").trim()||n;
+function place(p){const w=p.wilaya.replace(/^\d+\s/,"");return p.deliveryType==="pickup-point"?`مكتب ZR Express في ${p.commune} (ولاية ${w})`:`عنوانكم في ${p.commune}`}
+function msg(t,p){
+ const hi=`السلام عليكم ${clean(p.name)}،\nمعكم متجر PANDA لملابس الأطفال 🐼\n`;
+ const o=`طلبيتكم: ${p.products}\nالمبلغ: ${fmt(p.amount)} دج\nرقم التتبع: ${p.tracking}\n`;
+ if(t==="r3")return hi+`حاولت شركة التوصيل ZR Express الاتصال بكم عدة مرات دون رد، وستُعاد الطلبية قريباً إن لم تتواصلوا معنا.\n`+o+`الطلبية بانتظاركم في ${place(p)}.\nيُرجى الرد اليوم لنُبقيها محجوزة لكم 🙏`;
+ if(t==="r1")return hi+`طلبيتكم وصلت، وحاول الموزّع الاتصال بكم دون رد.\n`+o+(p.deliveryType==="pickup-point"?`يمكنكم استلامها من ${place(p)}.\n`:`سيعيد الموزّع الاتصال بكم لتسليمها إلى ${place(p)}.\n`)+`متى يناسبكم الاستلام؟`;
+ if(t==="desk")return hi+`طلبيتكم وصلت وهي جاهزة للاستلام ✅\n`+o+`مكان الاستلام: ${place(p)}.\nمتى ستمرّون لاستلامها؟`;
+ if(t==="cancel")return hi+`علمنا أنكم ألغيتم طلبيتكم، ونودّ معرفة السبب لنساعدكم: هل المشكلة في المقاس أو اللون أو موعد التسليم؟\n`+o+`يمكننا تغيير المقاس أو تعديل الموعد بسهولة 🙏`;
+ return hi+`نتابع معكم طلبيتكم:\n`+o+`نرجو تأكيد العنوان الصحيح (البلدية والحي) وموعد التسليم المناسب لكم.`;
+}
+function render(){
+ const q=document.getElementById("q").value.trim().toLowerCase();
+ const P=DATA.parcels;
+ const d=new Date(DATA.updatedAt);
+ document.getElementById("upd").innerHTML=`آخر تحديث<br><b>${d.toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit"})} · ${d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</b>`;
+ const risk=P.filter(p=>["r3","r2","r1"].includes(p.group));
+ document.getElementById("kpis").innerHTML=
+  `<div class="kpi alert"><b>${P.filter(p=>p.group==="r3").length}</b><span>آخر فرصة</span></div>
+   <div class="kpi"><b>${fmt(risk.reduce((a,p)=>a+p.amount,0))}</b><span>دج معرّضة للإرجاع</span></div>
+   <div class="kpi"><b>${P.filter(p=>DONE.has(p.tracking)).length}/${P.length}</b><span>تمت متابعتها</span></div>`;
+ document.getElementById("chips").innerHTML=
+  `<button class="chip ${filter==="all"?"on":""}" data-f="all">الكل <em>${P.length}</em></button>`+
+  G.map(g=>{const n=P.filter(p=>p.group===g.k).length;return n?`<button class="chip ${filter===g.k?"on":""}" data-f="${g.k}"><i style="background:${g.c}"></i>${g.t.replace("لا يرد — ","")} <em>${n}</em></button>`:""}).join("");
+ document.querySelectorAll(".chip").forEach(b=>b.onclick=()=>{filter=b.dataset.f;render()});
+ const list=document.getElementById("list");list.innerHTML="";let shown=0;
+ G.forEach(g=>{
+  if(filter!=="all"&&filter!==g.k)return;
+  let items=P.filter(p=>p.group===g.k).filter(p=>!q||[p.name,p.phone,p.wilaya,p.commune,p.tracking,p.products].join(" ").toLowerCase().includes(q));
+  if(!items.length)return;
+  items.sort((a,b)=>(DONE.has(a.tracking)-DONE.has(b.tracking))||b.amount-a.amount);
+  const s=document.createElement("section");s.className="group";
+  s.innerHTML=`<div class="ghead"><i style="background:${g.c}"></i>${g.t} · ${items.length}</div><div class="ghint">${g.h}</div>`;
+  items.forEach(p=>{
+   shown++;const m=msg(g.m,p);
+   const c=document.createElement("div");c.className="card"+(DONE.has(p.tracking)?" done":"");c.style.setProperty("--c",g.c);
+   c.innerHTML=`<div class="row"><div><div class="nm">${esc(clean(p.name))}<span class="pill">${p.deliveryType==="pickup-point"?"مكتب":"منزل"}</span></div>
+    <div class="sub">${esc(p.wilaya)} · ${esc(p.commune)} · <span dir="ltr">${esc(p.phone)}</span></div></div>
+    <div class="amt">${fmt(p.amount)} دج</div></div>
+    <div class="prd">${esc(p.products)}</div>
+    <div class="sub">${esc(p.situation)} · <span dir="ltr">${esc(p.tracking)}</span></div>
+    <div class="acts"><a class="call" href="tel:${esc(p.phone)}">📞 اتصال</a>
+    <a class="wa" target="_blank" rel="noopener" href="https://wa.me/${p.phone.replace(/\D/g,"")}?text=${encodeURIComponent(m)}">💬 واتساب</a>
+    <button class="ok">${DONE.has(p.tracking)?"✓ تم":"تم"}</button></div>
+    <details><summary>نص الرسالة</summary><div class="msg">${esc(m)}</div></details>`;
+   c.querySelector(".ok").onclick=()=>{DONE.has(p.tracking)?DONE.delete(p.tracking):DONE.add(p.tracking);saveDone();render()};
+   s.appendChild(c);
+  });
+  list.appendChild(s);
+ });
+ if(!shown)list.innerHTML=`<div class="empty">لا توجد طلبيات مطابقة 🎉</div>`;
+}
+let PIN=null;
+const b64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+async function decrypt(pin,enc){
+ const km=await crypto.subtle.importKey("raw",new TextEncoder().encode(pin),"PBKDF2",false,["deriveKey"]);
+ const key=await crypto.subtle.deriveKey({name:"PBKDF2",salt:b64(enc.salt),iterations:enc.iter,hash:"SHA-256"},km,{name:"AES-GCM",length:256},false,["decrypt"]);
+ const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:b64(enc.iv)},key,b64(enc.ct));
+ return JSON.parse(new TextDecoder().decode(pt));
+}
+async function fetchEnc(){const r=await fetch("data.enc.json?t="+Date.now(),{cache:"no-store"});return r.json()}
+async function load(){try{DATA=await decrypt(PIN,await fetchEnc());render()}catch(e){}}
+async function tryPin(pin){
+ try{DATA=await decrypt(pin,await fetchEnc());PIN=pin;try{localStorage.setItem("panda_pin",pin)}catch(_){}
+  const g=document.getElementById("gate");g&&g.remove();render();setInterval(load,10*60*1000);return true}catch(e){return false}
+}
+document.getElementById("q").oninput=()=>DATA&&render();
+document.getElementById("gateForm").onsubmit=async e=>{
+ e.preventDefault();if(!(await tryPin(document.getElementById("pin").value.trim())))document.getElementById("err").textContent="الرمز غير صحيح";
+};
+(function(){let p=null;try{p=localStorage.getItem("panda_pin")}catch(e){}if(p)tryPin(p)})();
+</script>
+</body>
+</html>
