@@ -95,6 +95,15 @@ export default async (req) => {
     const c = {}; for (const p of rows) { const k = (p.state?.name || "") + " | " + (p.state?.description || ""); c[k] = (c[k] || 0) + 1; }
     return json(c);
   }
+  if (url.searchParams.get("debug") === "sit") {
+    const rows = (await fetchRecent(5)).filter((x) => /bureau|livraison/i.test(x.state?.description || "")).slice(0, 12);
+    for (const p of rows) {
+      const h = await zr(`/parcels/${p.id}/state-history`);
+      const it = h.find((e) => Array.isArray(e.situations) && e.situations.length);
+      if (it) return json({ sample: it.situations.map((x) => Object.fromEntries(Object.entries(x).map(([k, v]) => [k, typeof v === "string" && /name|description|code|label|title/i.test(k) ? v : typeof v === "object" && v ? Object.keys(v) : typeof v]))) });
+    }
+    return json({ none: true });
+  }
   if (url.searchParams.get("debug") === "history") {
     const rows = await fetchRecent(5);
     const p = rows.find((x) => /bureau|livraison/i.test(x.state?.description || x.state?.name || ""));
