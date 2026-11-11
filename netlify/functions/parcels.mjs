@@ -1,13 +1,12 @@
-// Live ZR Express → PANDA follow-up list. Secrets live in Netlify env vars:
-// ZR_API_KEY, ZR_TENANT, SITE_PIN
+// Live ZR Express → PANDA follow-up list.
+// Netlify env vars: ZR_API_KEY, ZR_TENANT, SITE_PIN
 const BASE = "https://api.zrexpress.app/api/v1";
 const env = (k) => (globalThis.Netlify?.env?.get?.(k) ?? process.env[k] ?? "").trim();
+const ACTIVE = new Set(["confirme_au_bureau", "sortie_en_livraison", "en_livraison"]);
 let cache = { at: 0, data: null };
+const hist = new Map(); // parcelId -> { at, sit, hub }
 
 const norm = (s) => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[_-]+/g, " ").trim();
-const get = (o, path) => path.split(".").reduce((a, k) => (a == null ? a : a[k]), o);
-const pick = (o, paths) => { for (const p of paths) { const v = get(o, p); if (v !== undefined && v !== null && v !== "") return v; } return undefined; };
-const label = (v) => (v && typeof v === "object" ? pick(v, ["name", "description", "label", "title", "code"]) : v);
 
 async function zr(path, body) {
   const r = await fetch(BASE + path, {
@@ -15,7 +14,7 @@ async function zr(path, body) {
     headers: { "X-Api-Key": env("ZR_API_KEY"), "X-Tenant": env("ZR_TENANT"), "Content-Type": "application/json", Accept: "application/json" },
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (!r.ok) throw new Error(`ZR ${path} ${r.status}`);
+  if (!r.ok) throw new Error(`ZR ${r.status}`);
   return r.json();
 }
 
@@ -33,101 +32,78 @@ async function fetchRecent(days = 15) {
   return items;
 }
 
-function shape(p) {
-  const state = label(pick(p, ["state", "currentState", "lastState"])) || "";
-  const situation = label(pick(p, ["situation", "lastSituation", "currentSituation", "state.situation", "deliveryAttempt.situation"])) || "";
-  const products = pick(p, ["orderedProducts", "products", "items"]);
-  const prodText = Array.isArray(products) && products.length
-    ? products.map((x) => `${pick(x, ["productName", "name", "product.name", "description"]) ?? ""}${(x.quantity ?? 1) > 1 ? " × " + x.quantity : ""}`).join(" | ")
-    : pick(p, ["description", "productsDescription", "content"]) || "";
-  const wil = pick(p, ["deliveryAddress.city", "address.city", "customer.address.city", "cityTerritory.name", "wilaya"]) || "";
-  const wilCode = pick(p, ["deliveryAddress.cityCode", "deliveryAddress.cityTerritoryCode", "wilayaCode"]);
-  return {
-    tracking: pick(p, ["trackingNumber", "tracking"]) || "",
-    name: pick(p, ["customer.name", "customer.fullName", "recipient.name", "customerName", "receiverName"]) || "",
-    phone: String(pick(p, ["customer.phone.number1", "customer.phoneNumber", "customer.phone", "phone.number1", "customerPhone", "recipient.phone"]) || ""),
-    wilaya: (wilCode ? String(wilCode).padStart(2, "0") + " " : "") + wil,
-    commune: pick(p, ["deliveryAddress.district", "address.district", "customer.address.district", "districtTerritory.name", "commune"]) || "",
-    deliveryType: pick(p, ["deliveryType"]) || "home",
-    amount: Number(pick(p, ["amount", "totalAmount", "codAmount", "price", "productsPrice"]) || 0),
-    products: String(prodText).replace(/👑[^|]*\|?\s*/g, "").trim(),
-    vip: /vip/i.test(String(prodText)),
-    state, situation,
-    createdAt: pick(p, ["createdAt"]) || null,
-    lastUpdate: pick(p, ["lastStateUpdateAt", "updatedAt", "lastModifiedAt"]) || null,
-  };
+// Latest meaningful situation + current hub, from the state history.
+async function situationOf(p) {
+  const c = hist.get(p.id);
+  if (c && Date.now() - c.at < 150e3 && c.stamp === p.lastStateUpdateAt) return c;
+  const h = await zr(`/parcels/${p.id}/state-history`);
+  const list = (Array.isArray(h) ? h : h.items || []).slice().sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  const cur = [...list].reverse().find((e) => e.newState?.name === p.state?.name) || list[list.length - 1] || {};
+  const sits = (cur.situations || []).slice().sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+    .map((s) => s.situationName || s.situationDescription || "").filter((n) => n && !/appel telephonique/.test(norm(n)));
+  const out = { at: Date.now(), stamp: p.lastStateUpdateAt, sit: sits[sits.length - 1] || "", hub: cur.location?.hubName || "" };
+  hist.set(p.id, out);
+  return out;
 }
 
-function group(x) {
-  const s = norm(x.situation), st = norm(x.state);
-  const done = /livr|encaiss|recouvr|retour|returned|delivered|annule par|rembours/.test(st);
-  if (done) return null;
-  if (/repond pas\s*3|no answer\s*3/.test(s)) return "r3";
-  if (/repond pas\s*2|no answer\s*2/.test(s)) return "r2";
-  if (/repond pas\s*1|repond pas|no answer/.test(s)) return "r1";
+async function pool(items, n, fn) {
+  const out = new Array(items.length); let i = 0;
+  await Promise.all(Array.from({ length: n }, async () => { while (i < items.length) { const k = i++; try { out[k] = await fn(items[k]); } catch { out[k] = null; } } }));
+  return out;
+}
+
+function group(state, sit, x) {
+  const s = norm(sit);
+  if (/repond pas\s*3/.test(s)) return "r3";
+  if (/repond pas\s*2/.test(s)) return "r2";
+  if (/repond pas/.test(s)) return "r1";
   if (/annul/.test(s)) return "cancel";
-  if (/erron|adresse|address|report|rendez vous|injoignable|ferme/.test(s)) return "fix";
-  if (/attente du client|waiting/.test(s)) return "wait";
-  if (/confirme au bureau|confirmed/.test(st) && x.deliveryType === "home" && x.lastUpdate && Date.now() - new Date(x.lastUpdate) > 864e5) {
-    x.situation = "في المكتب دون خروج للتوصيل منذ أكثر من 24 ساعة"; return "fix";
-  }
+  if (/attente du client/.test(s)) return "wait";
+  if (s) return "fix"; // erronée, reporté, rendez-vous, injoignable, fermé…
+  if (state === "confirme_au_bureau" && x.deliveryType === "home" && Date.now() - new Date(x.lastStateUpdateAt) > 864e5) return "fix";
   return null;
 }
 
+async function build() {
+  const rows = (await fetchRecent()).filter((p) => ACTIVE.has(p.state?.name));
+  const sits = await pool(rows, 10, situationOf);
+  const parcels = [];
+  rows.forEach((p, i) => {
+    const info = sits[i] || { sit: "", hub: "" };
+    const g = group(p.state?.name, info.sit, p);
+    if (!g) return;
+    const stuck = !info.sit && g === "fix";
+    const prod = String(p.productsDescription || p.description || "");
+    const code = p.deliveryAddress?.cityTerritoryCode;
+    parcels.push({
+      group: g,
+      tracking: p.trackingNumber || "",
+      name: p.customer?.name || "",
+      phone: p.customer?.phone?.number1 || "",
+      wilaya: (code ? String(code).padStart(2, "0") + " " : "") + (p.deliveryAddress?.city || ""),
+      commune: p.deliveryAddress?.district || "",
+      deliveryType: p.deliveryType || "home",
+      amount: Number(p.amount || 0),
+      products: prod.replace(/👑[^|,\n]*(\|\s*)?/g, "").replace(/\s+/g, " ").trim() + (/vip/i.test(prod) ? " (VIP)" : ""),
+      situation: stuck ? "في المكتب دون خروج للتوصيل منذ أكثر من 24 ساعة" : info.sit,
+      state: p.state?.description || "",
+      hub: info.hub,
+      lastUpdate: p.lastStateUpdateAt,
+    });
+  });
+  return { updatedAt: new Date().toISOString(), parcels };
+}
+
 export default async (req) => {
-  const url = new URL(req.url);
   const json = (b, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
   if (!env("ZR_API_KEY") || !env("ZR_TENANT") || !env("SITE_PIN")) return json({ error: "not_configured" }, 503);
-
-  // Structure check without any personal data: key names only.
-  if (url.searchParams.get("debug") === "keys") {
-    try {
-      const res = await zr("/parcels/search", { pageNumber: 1, pageSize: 3, orderBy: ["createdAt desc"] });
-      const walk = (o, pre = "") => o && typeof o === "object" && !Array.isArray(o)
-        ? Object.entries(o).flatMap(([k, v]) => Array.isArray(v) ? [pre + k + "[]", ...(v[0] && typeof v[0] === "object" ? walk(v[0], pre + k + "[].") : [])] : v && typeof v === "object" ? [pre + k, ...walk(v, pre + k + ".")] : [pre + k + ":" + typeof v])
-        : [];
-      return json({ ok: true, top: Object.keys(res), keys: res.items?.[0] ? walk(res.items[0]) : [] });
-    } catch (e) { return json({ ok: false, error: String(e.message) }, 502); }
-  }
-
-  if (url.searchParams.get("debug") === "states") {
-    const rows = await fetchRecent(5);
-    const c = {}; for (const p of rows) { const k = (p.state?.name || "") + " | " + (p.state?.description || ""); c[k] = (c[k] || 0) + 1; }
-    return json(c);
-  }
-  if (url.searchParams.get("debug") === "sit") {
-    const rows = (await fetchRecent(5)).filter((x) => /bureau|livraison/i.test(x.state?.description || "")).slice(0, 12);
-    for (const p of rows) {
-      const h = await zr(`/parcels/${p.id}/state-history`);
-      const it = h.find((e) => Array.isArray(e.situations) && e.situations.length);
-      if (it) return json({ sample: it.situations.map((x) => Object.fromEntries(Object.entries(x).map(([k, v]) => [k, typeof v === "string" && /name|description|code|label|title/i.test(k) ? v : typeof v === "object" && v ? Object.keys(v) : typeof v]))) });
-    }
-    return json({ none: true });
-  }
-  if (url.searchParams.get("debug") === "history") {
-    const rows = await fetchRecent(5);
-    const p = rows.find((x) => /bureau|livraison/i.test(x.state?.description || x.state?.name || ""));
-    if (!p) return json({ none: true });
-    const h = await zr(`/parcels/${p.id}/state-history`);
-    const arr = Array.isArray(h) ? h : h.items || h.history || [];
-    const walk = (o, pre = "") => o && typeof o === "object" && !Array.isArray(o)
-      ? Object.entries(o).flatMap(([k, v]) => v && typeof v === "object" && !Array.isArray(v) ? [pre + k, ...walk(v, pre + k + ".")] : [pre + k + ":" + (typeof v === "string" && /situation|name|description|reason|comment/i.test(k) ? JSON.stringify(v).slice(0, 60) : typeof v)])
-      : [];
-    return json({ type: Array.isArray(h) ? "array" : Object.keys(h), n: arr.length, last: walk(arr[arr.length - 1]), first: walk(arr[0]) });
-  }
-
   if (req.headers.get("x-pin") !== env("SITE_PIN")) return json({ error: "bad_pin" }, 401);
   try {
-    if (!cache.data || Date.now() - cache.at > 60e3) {
-      const rows = (await fetchRecent()).map(shape);
-      const parcels = [];
-      for (const x of rows) { const g = group(x); if (g) parcels.push({ group: g, ...x, products: x.products + (x.vip ? " (VIP)" : "") }); }
-      cache = { at: Date.now(), data: { updatedAt: new Date().toISOString(), parcels } };
-    }
+    if (!cache.data || Date.now() - cache.at > 60e3) cache = { at: Date.now(), data: await build() };
     return json(cache.data);
   } catch (e) {
     if (cache.data) return json({ ...cache.data, stale: true });
-    return json({ error: "zr_unreachable", detail: String(e.message) }, 502);
+    return json({ error: "zr_unreachable" }, 502);
   }
 };
 

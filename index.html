@@ -180,7 +180,7 @@ const SIT={"Ne répond pas 1":"لا يرد · المحاولة 1","Ne répond pa
 const sit=s=>SIT[s]||s;
 const grp=k=>G.find(g=>g.k===k);
 function toast(t){const e=document.getElementById("toast");e.textContent=t;e.classList.add("show");clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove("show"),1600)}
-function place(p){const w=p.wilaya.replace(/^\d+\s/,"");return p.deliveryType==="pickup-point"?`مكتب ZR Express في ${p.commune} (ولاية ${w})`:`عنوانكم في ${p.commune}`}
+function place(p){const w=p.wilaya.replace(/^\d+\s/,"");if(p.deliveryType!=="pickup-point")return `عنوانكم في ${p.commune}`;return p.hub?`مكتب ZR Express: ${p.hub.replace(/^Hub\s*/i,"")}`:`مكتب ZR Express في ${p.commune} (ولاية ${w})`}
 function msg(t,p){
  const hi=`السلام عليكم ${clean(p.name)}،\nمعكم متجر PANDA لملابس الأطفال 🐼\n`;
  const o=`طلبيتكم: ${p.products}\nالمبلغ: ${fmt(p.amount)} دج\nرقم التتبع: ${p.tracking}\n`;
@@ -194,7 +194,7 @@ function item(p){
  const g=grp(p.group),m=msg(g.m,p),d=DONE.has(p.tracking),num=p.phone.replace(/\D/g,"");
  const el=document.createElement("div");el.className="it"+(d?" isdone":"");el.style.setProperty("--c",g.c);
  el.innerHTML=`<div class="r1x"><div class="nm">${esc(clean(p.name))}</div><div class="amt"><span class="num">${fmt(p.amount)}</span> <small>دج</small></div></div>
- <div class="meta"><span>${IC.pin}${esc(p.wilaya.replace(/^\d+\s/,""))} · ${esc(p.commune)}</span><span>${IC.box}${p.deliveryType==="pickup-point"?"استلام من المكتب":"توصيل للمنزل"}</span><span>${IC.ph}<span class="num">${esc(p.phone.replace("+213","0"))}</span></span></div>
+ <div class="meta"><span>${IC.pin}${esc(p.wilaya.replace(/^\d+\s/,""))} · ${esc(p.commune)}</span><span>${IC.box}${p.deliveryType==="pickup-point"?(p.hub?esc(p.hub.replace(/^Hub\s*/i,"")):"استلام من المكتب"):"توصيل للمنزل"}</span><span>${IC.ph}<span class="num">${esc(p.phone.replace("+213","0"))}</span></span></div>
  <div class="prd">${esc(p.products)}</div>
  <div class="ft"><span class="st">${esc(sit(p.situation))}</span>
   <div class="acts"><a class="ab call" href="tel:${esc(p.phone)}">${IC.call}اتصال</a><a class="ab wa" target="_blank" rel="noopener" href="https://wa.me/${num}?text=${encodeURIComponent(m)}" aria-label="واتساب">${IC.wa}</a><button class="ab cp" aria-label="نسخ الرسالة">${IC.copy}</button><button class="ab done" aria-label="تم">${IC.check}</button></div></div>
