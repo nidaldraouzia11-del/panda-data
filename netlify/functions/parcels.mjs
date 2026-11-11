@@ -90,6 +90,23 @@ export default async (req) => {
     } catch (e) { return json({ ok: false, error: String(e.message) }, 502); }
   }
 
+  if (url.searchParams.get("debug") === "states") {
+    const rows = await fetchRecent(5);
+    const c = {}; for (const p of rows) { const k = (p.state?.name || "") + " | " + (p.state?.description || ""); c[k] = (c[k] || 0) + 1; }
+    return json(c);
+  }
+  if (url.searchParams.get("debug") === "history") {
+    const rows = await fetchRecent(5);
+    const p = rows.find((x) => /bureau|livraison/i.test(x.state?.description || x.state?.name || ""));
+    if (!p) return json({ none: true });
+    const h = await zr(`/parcels/${p.id}/state-history`);
+    const arr = Array.isArray(h) ? h : h.items || h.history || [];
+    const walk = (o, pre = "") => o && typeof o === "object" && !Array.isArray(o)
+      ? Object.entries(o).flatMap(([k, v]) => v && typeof v === "object" && !Array.isArray(v) ? [pre + k, ...walk(v, pre + k + ".")] : [pre + k + ":" + (typeof v === "string" && /situation|name|description|reason|comment/i.test(k) ? JSON.stringify(v).slice(0, 60) : typeof v)])
+      : [];
+    return json({ type: Array.isArray(h) ? "array" : Object.keys(h), n: arr.length, last: walk(arr[arr.length - 1]), first: walk(arr[0]) });
+  }
+
   if (req.headers.get("x-pin") !== env("SITE_PIN")) return json({ error: "bad_pin" }, 401);
   try {
     if (!cache.data || Date.now() - cache.at > 60e3) {
