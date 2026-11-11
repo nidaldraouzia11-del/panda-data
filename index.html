@@ -132,7 +132,7 @@ footer{text-align:center;color:var(--soft);font-size:11.5px;padding:22px 0 calc(
 
 <header><div class="wrap hd">
  <div class="brand"><img class="wm" src="logo.png" alt="PANDA"><span class="tag">متابعة الطلبيات</span></div>
- <div class="sync"><span class="dotlive"></span><span>آخر تحديث <b id="upd" class="num">—</b></span>
+ <div class="sync"><span class="dotlive"></span><span>مباشر · <b id="upd" class="num">—</b></span>
   <button class="rf" id="rf" aria-label="تحديث"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button></div>
 </div></header>
 
@@ -148,7 +148,7 @@ footer{text-align:center;color:var(--soft);font-size:11.5px;padding:22px 0 calc(
  </div>
 
  <div id="list"></div>
- <footer>يُحدَّث تلقائياً كل ساعة من 8:00 إلى 20:00 · علامة «تم» محفوظة على هذا الجهاز</footer>
+ <footer>بيانات مباشرة من ZR Express · تتجدّد كل 3 دقائق · علامة «تم» محفوظة على هذا الجهاز</footer>
 </main>
 <div class="toast" id="toast"></div>
 
@@ -231,23 +231,18 @@ function render(){
  if(doneItems.length){const b=document.createElement("details");b.className="donebox";b.innerHTML=`<summary>✓ تمت متابعتها (${doneItems.length}) — اضغطي للعرض</summary>`;doneItems.forEach(p=>b.appendChild(item(p)));L.appendChild(b)}
  if(!shown&&!doneItems.length)L.innerHTML=`<div class="empty">لا توجد طلبيات تحتاج متابعة هنا 🎉</div>`;
 }
-const b64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
-async function decrypt(pin,enc){
- const km=await crypto.subtle.importKey("raw",new TextEncoder().encode(pin),"PBKDF2",false,["deriveKey"]);
- const key=await crypto.subtle.deriveKey({name:"PBKDF2",salt:b64(enc.salt),iterations:enc.iter,hash:"SHA-256"},km,{name:"AES-GCM",length:256},false,["decrypt"]);
- return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:"AES-GCM",iv:b64(enc.iv)},key,b64(enc.ct))));
-}
-const fetchEnc=async()=>(await fetch("data.enc.json?t="+Date.now(),{cache:"no-store"})).json();
-async function load(manual){const rf=document.getElementById("rf");rf.classList.add("spin");try{DATA=await decrypt(PIN,await fetchEnc());render();manual&&toast("القائمة محدَّثة")}catch(e){manual&&toast("تعذّر التحديث")}rf.classList.remove("spin")}
+async function api(pin){const r=await fetch("/api/parcels?t="+Date.now(),{headers:{"x-pin":pin},cache:"no-store"});if(r.status===401)throw new Error("pin");const j=await r.json();if(!r.ok||!j.parcels)throw new Error(j.error||"err");return j}
+async function load(manual){const rf=document.getElementById("rf");rf.classList.add("spin");try{DATA=await api(PIN);render();manual&&toast("القائمة محدَّثة")}catch(e){manual&&toast("تعذّر التحديث")}rf.classList.remove("spin")}
 async function tryPin(pin){
- try{DATA=await decrypt(pin,await fetchEnc());PIN=pin;try{localStorage.setItem("panda_pin",pin)}catch(_){}
-  document.getElementById("gate")?.remove();render();setInterval(load,5*60*1000);return true}catch(e){return false}
+ try{DATA=await api(pin);PIN=pin;try{localStorage.setItem("panda_pin",pin)}catch(_){}
+  document.getElementById("gate")?.remove();render();setInterval(load,3*60*1000);return true}
+ catch(e){if(e.message!=="pin"){document.getElementById("err").textContent="تعذّر الاتصال بـ ZR Express، أعيدي المحاولة"}return false}
 }
 document.getElementById("rf").onclick=()=>PIN&&load(true);
 document.getElementById("q").oninput=()=>DATA&&render();
 document.addEventListener("visibilitychange",()=>{if(!document.hidden&&PIN)load()});
 document.getElementById("gateForm").onsubmit=async e=>{e.preventDefault();const b=document.getElementById("gbtn");b.textContent="…";
- if(!(await tryPin(document.getElementById("pin").value.trim()))){document.getElementById("err").textContent="الرمز غير صحيح";b.textContent="دخول"}};
+ document.getElementById("err").textContent="";if(!(await tryPin(document.getElementById("pin").value.trim()))){if(!document.getElementById("err").textContent)document.getElementById("err").textContent="الرمز غير صحيح";b.textContent="دخول"}};
 (function(){let p=null;try{p=localStorage.getItem("panda_pin")}catch(e){}if(p)tryPin(p)})();
 </script>
 </body>
